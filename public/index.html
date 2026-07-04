@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>每日计划</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- 侧边栏 - 任务管理 -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <h1>📋 每日计划</h1>
+      </div>
+      <div class="today-date" id="todayDate"></div>
+
+      <!-- 任务输入 -->
+      <div class="task-input-container">
+        <div class="task-input-wrapper">
+          <input type="text" class="task-input" id="taskInput" placeholder="添加新任务...">
+          <select class="category-select" id="categorySelect">
+            <option value="work">工作</option>
+            <option value="life">生活</option>
+            <option value="study">学习</option>
+            <option value="general">其他</option>
+          </select>
+        </div>
+        <button class="add-task-btn" id="addTaskBtn">添加任务</button>
+      </div>
+
+      <!-- 任务列表 -->
+      <div class="tasks-section">
+        <h3>今日任务</h3>
+        <div class="task-list" id="taskList"></div>
+      </div>
+
+      <!-- 设置 -->
+      <div class="settings-section">
+        <h3>设置</h3>
+        <div class="setting-item">
+          <span class="setting-label">提醒时间</span>
+          <input type="time" class="setting-input" id="reminderTime" value="21:30">
+        </div>
+        <div class="setting-item">
+          <span class="setting-label">启用提醒</span>
+          <label class="reminder-toggle">
+            <input type="checkbox" id="reminderEnabled" checked>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <div class="setting-item">
+          <button class="nav-btn" id="testReminderBtn" style="width: 100%;">🧪 测试提醒</button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- 主内容 - 日历视图 -->
+    <main class="main-content">
+      <div class="calendar-header">
+        <h2 class="calendar-title" id="calendarTitle">2024年1月</h2>
+        <div class="calendar-nav">
+          <button class="nav-btn" id="prevMonthBtn">◀ 上月</button>
+          <button class="nav-btn" id="todayBtn">今天</button>
+          <button class="nav-btn" id="nextMonthBtn">下月 ▶</button>
+        </div>
+      </div>
+
+      <div class="calendar-grid">
+        <div class="calendar-weekdays">
+          <div class="weekday">周日</div>
+          <div class="weekday">周一</div>
+          <div class="weekday">周二</div>
+          <div class="weekday">周三</div>
+          <div class="weekday">周四</div>
+          <div class="weekday">周五</div>
+          <div class="weekday">周六</div>
+        </div>
+        <div class="calendar-days" id="calendarDays"></div>
+      </div>
+
+      <!-- 日期详情面板 -->
+      <div class="date-detail-panel" id="dateDetailPanel" style="display: none;">
+        <div class="detail-header">
+          <div class="detail-date" id="detailDate">2024年1月1日</div>
+          <div class="detail-stats">
+            <div class="stat-item">
+              <span class="stat-value" id="detailCompleted">0</span>
+              <span class="stat-label">已完成</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-value" id="detailTotal">0</span>
+              <span class="stat-label">总任务</span>
+            </div>
+          </div>
+        </div>
+        <div class="detail-tasks" id="detailTasks"></div>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    // ==================== 状态管理 ====================
+    let currentYear = new Date().getFullYear();
+    let currentMonth = new Date().getMonth() + 1;
+    let selectedDate = null;
+    let dailyStats = {};
+
+    // ==================== 工具函数 ====================
+    function formatDate(date) {
+      const y = date.getFullYear();
+      const m = String(date.getMonth() + 1).padStart(2, '0');
+      const d = String(date.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
+
+    function formatDateChinese(dateStr) {
+      const date = new Date(dateStr);
+      const y = date.getFullYear();
+      const m = date.getMonth() + 1;
+      const d = date.getDate();
+      const weekdays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+      const w = weekdays[date.getDay()];
+      return `${y}年${m}月${d}日 ${w}`;
+    }
+
+    function isToday(dateStr) {
+      return dateStr === formatDate(new Date());
+    }
+
+    function getCategoryLabel(category) {
+      const labels = { work: '工作', life: '生活', study: '学习', general: '其他' };
+      return labels[category] || '其他';
+    }
+
+    function getCategoryClass(category) {
+      return category || 'general';
+    }
+
+    // ==================== 初始化 ====================
+    async function init() {
+      updateTodayDate();
+      await loadSettings();
+      await loadTasks();
+      await renderCalendar();
+    }
+
+    function updateTodayDate() {
+      const today = new Date();
+      const weekdays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+      const w = weekdays[today.getDay()];
+      document.getElementById('todayDate').textContent =
+        `${today.getFullYear()}年${today.getMonth() + 1}月${today.getDate()}日 ${w}`;
+    }
+
+    async function loadSettings() {
+      const settings = await window.api.getSettings();
+      document.getElementById('reminderTime').value = settings.reminder_time || '21:30';
+      document.getElementById('reminderEnabled').checked = settings.reminder_enabled !== 'false';
+    }
+
+    async function loadTasks() {
+      const tasks = await window.api.getTasksByDate(formatDate(new Date()));
+      renderTaskList(tasks);
+    }
+
+    // ==================== 任务列表渲染 ====================
+    function renderTaskList(tasks) {
+      const container = document.getElementById('taskList');
+
+      if (tasks.length === 0) {
+        container.innerHTML = '<p style="color: #999; text-align: center; padding: 20px;">暂无任务，添加一个吧！</p>';
+        return;
+      }
+
+      container.innerHTML = tasks.map(task => `
+        <div class="task-item" data-task-id="${task.id}">
+          <input type="checkbox" class="task-checkbox"
+            ${task.completed ? 'checked' : ''}
+            onchange="toggleTask(${task.id}, this.checked)">
+          <div class="task-info">
+            <div class="task-title ${task.completed ? 'completed' : ''}">${task.title}</div>
+            <div class="task-category ${getCategoryClass(task.category)}">${getCategoryLabel(task.category)}</div>
+          </div>
+          <button class="delete-task-btn" onclick="deleteTask(${task.id})">删除</button>
+        </div>
+      `).join('');
+    }
+
+    async function addNewTask() {
+      const input = document.getElementById('taskInput');
+      const category = document.getElementById('categorySelect').value;
+      const title = input.value.trim();
+
+      if (!title) {
+        alert('请输入任务名称');
+        return;
+      }
+
+      await window.api.addTask(title, category);
+      input.value = '';
+      await loadTasks();
+      await renderCalendar();
+    }
+
+    async function toggleTask(taskId, completed) {
+      const date = formatDate(new Date());
+      await window.api.toggleTask(taskId, date, completed);
+      await loadTasks();
+      await renderCalendar();
+
+      // 如果选中的是当前选中的日期，也更新详情面板
+      if (selectedDate === date) {
+        await showDateDetail(date);
+      }
+    }
+
+    async function deleteTask(taskId) {
+      if (!confirm('确定要删除这个任务吗？')) return;
+      await window.api.deleteTask(taskId);
+      await loadTasks();
+      await renderCalendar();
+    }
+
+    // ==================== 日历渲染 ====================
+    async function renderCalendar() {
+      const title = document.getElementById('calendarTitle');
+      title.textContent = `${currentYear}年${currentMonth}月`;
+
+      // 获取当月统计数据
+      dailyStats = {};
+      const stats = await window.api.getDailyStats(currentYear, currentMonth);
+      stats.forEach(s => {
+        dailyStats[s.date] = {
+          total: s.total_tasks,
+          completed: s.completed_tasks
+        };
+      });
+
+      const container = document.getElementById('calendarDays');
+      const firstDay = new Date(currentYear, currentMonth - 1, 1);
+      const lastDay = new Date(currentYear, currentMonth, 0);
+      const startPadding = firstDay.getDay();
+      const totalDays = lastDay.getDate();
+
+      let html = '';
+
+      // 上月补齐
+      const prevMonth = new Date(currentYear, currentMonth - 1, 0);
+      for (let i = startPadding - 1; i >= 0; i--) {
+        const day = prevMonth.getDate() - i;
+        html += `<div class="calendar-day other-month"><span class="day-number">${day}</span></div>`;
+      }
+
+      // 当月
+      const today = formatDate(new Date());
+      for (let day = 1; day <= totalDays; day++) {
+        const dateStr = `${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        const isTodayClass = dateStr === today ? 'today' : '';
+        const isSelectedClass = dateStr === selectedDate ? 'selected' : '';
+        const stats = dailyStats[dateStr] || { total: 0, completed: 0 };
+        const completionRate = stats.total > 0 ? (stats.completed / stats.total * 100) : 0;
+
+        // 完成度颜色
+        let indicatorColor = '';
+        if (stats.total > 0) {
+          if (completionRate >= 100) indicatorColor = '#52c41a';
+          else if (completionRate >= 50) indicatorColor = '#faad14';
+          else indicatorColor = '#f5222d';
+        }
+
+        html += `
+          <div class="calendar-day ${isTodayClass} ${isSelectedClass}"
+               onclick="selectDate('${dateStr}')">
+            <span class="day-number">${day}</span>
+            ${stats.total > 0 ? `
+              <div class="day-stats">${stats.completed}/${stats.total}</div>
+              <div class="completion-indicator">
+                <div class="completion-fill" style="width: ${completionRate}%; background: ${indicatorColor}"></div>
+              </div>
+            ` : ''}
+          </div>
+        `;
+      }
+
+      // 下月补齐
+      const remaining = 42 - (startPadding + totalDays);
+      for (let i = 1; i <= remaining; i++) {
+        html += `<div class="calendar-day other-month"><span class="day-number">${i}</span></div>`;
+      }
+
+      container.innerHTML = html;
+    }
+
+    async function selectDate(dateStr) {
+      selectedDate = dateStr;
+      await renderCalendar();
+      await showDateDetail(dateStr);
+    }
+
+    async function showDateDetail(dateStr) {
+      const panel = document.getElementById('dateDetailPanel');
+      const tasks = await window.api.getTasksByDate(dateStr);
+      const stats = await window.api.getDateStats(dateStr);
+
+      document.getElementById('detailDate').textContent = formatDateChinese(dateStr);
+      document.getElementById('detailCompleted').textContent = stats.completed_tasks;
+      document.getElementById('detailTotal').textContent = stats.total_tasks;
+
+      const container = document.getElementById('detailTasks');
+      if (tasks.length === 0) {
+        container.innerHTML = '<p style="color: #999; text-align: center;">这天没有任务记录</p>';
+      } else {
+        container.innerHTML = tasks.map(task => `
+          <div class="detail-task-item ${task.completed ? 'completed' : ''}">
+            <input type="checkbox" class="task-checkbox"
+              ${task.completed ? 'checked' : ''}
+              onchange="toggleTaskOnDate(${task.id}, '${dateStr}', this.checked)">
+            <span class="detail-task-title">${task.title}</span>
+            <span class="task-category ${getCategoryClass(task.category)}">${getCategoryLabel(task.category)}</span>
+          </div>
+        `).join('');
+      }
+
+      panel.style.display = 'block';
+    }
+
+    async function toggleTaskOnDate(taskId, date, completed) {
+      await window.api.toggleTask(taskId, date, completed);
+      await showDateDetail(date);
+      await renderCalendar();
+    }
+
+    function changeMonth(delta) {
+      currentMonth += delta;
+      if (currentMonth > 12) {
+        currentMonth = 1;
+        currentYear++;
+      } else if (currentMonth < 1) {
+        currentMonth = 12;
+        currentYear--;
+      }
+      selectedDate = null;
+      document.getElementById('dateDetailPanel').style.display = 'none';
+      renderCalendar();
+    }
+
+    function goToToday() {
+      const today = new Date();
+      currentYear = today.getFullYear();
+      currentMonth = today.getMonth() + 1;
+      selectDate(formatDate(today));
+      renderCalendar();
+    }
+
+    // ==================== 设置相关 ====================
+    async function saveReminderTime() {
+      const time = document.getElementById('reminderTime').value;
+      await window.api.setSetting('reminder_time', time);
+    }
+
+    async function saveReminderEnabled() {
+      const enabled = document.getElementById('reminderEnabled').checked;
+      await window.api.setSetting('reminder_enabled', enabled ? 'true' : 'false');
+    }
+
+    async function testReminder() {
+      await window.api.testReminder();
+    }
+
+    // ==================== 事件绑定 ====================
+    document.getElementById('addTaskBtn').addEventListener('click', addNewTask);
+    document.getElementById('taskInput').addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') addNewTask();
+    });
+    document.getElementById('prevMonthBtn').addEventListener('click', () => changeMonth(-1));
+    document.getElementById('nextMonthBtn').addEventListener('click', () => changeMonth(1));
+    document.getElementById('todayBtn').addEventListener('click', goToToday);
+    document.getElementById('reminderTime').addEventListener('change', saveReminderTime);
+    document.getElementById('reminderEnabled').addEventListener('change', saveReminderEnabled);
+    document.getElementById('testReminderBtn').addEventListener('click', testReminder);
+
+    // 启动
+    init();
+  </script>
+</body>
+</html>

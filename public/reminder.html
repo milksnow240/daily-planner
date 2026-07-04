@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>每日提醒</title>
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+    }
+  </style>
+</head>
+<body>
+  <div class="reminder-container">
+    <div class="reminder-header">
+      <div class="reminder-icon">⏰</div>
+      <h1 class="reminder-title">是时候更新你的每日计划了！</h1>
+      <p class="reminder-subtitle" id="reminderDate"></p>
+    </div>
+
+    <div class="reminder-stats">
+      <div class="reminder-stat">
+        <div class="reminder-stat-value" id="completedCount">0</div>
+        <div class="reminder-stat-label">已完成</div>
+      </div>
+      <div class="reminder-stat">
+        <div class="reminder-stat-value" id="totalCount">0</div>
+        <div class="reminder-stat-label">总任务</div>
+      </div>
+    </div>
+
+    <div class="reminder-tasks" id="reminderTasks">
+      <!-- 任务列表将在这里动态生成 -->
+    </div>
+
+    <div class="reminder-actions">
+      <button class="reminder-btn secondary" onclick="closeReminder()">稍后再说</button>
+      <button class="reminder-btn primary" onclick="openMainWindow()">去更新计划</button>
+    </div>
+  </div>
+
+  <script>
+    async function init() {
+      const today = new Date();
+      const weekdays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+      const w = weekdays[today.getDay()];
+
+      document.getElementById('reminderDate').textContent =
+        `${today.getFullYear()}年${today.getMonth() + 1}月${today.getDate()}日 ${w}`;
+
+      await loadTasks();
+    }
+
+    function formatDate(date) {
+      const y = date.getFullYear();
+      const m = String(date.getMonth() + 1).padStart(2, '0');
+      const d = String(date.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
+
+    function getCategoryLabel(category) {
+      const labels = { work: '工作', life: '生活', study: '学习', general: '其他' };
+      return labels[category] || '其他';
+    }
+
+    async function loadTasks() {
+      const tasks = await window.api.getTasksByDate(formatDate(new Date()));
+      const completedCount = tasks.filter(t => t.completed).length;
+      const totalCount = tasks.length;
+
+      document.getElementById('completedCount').textContent = completedCount;
+      document.getElementById('totalCount').textContent = totalCount;
+
+      const container = document.getElementById('reminderTasks');
+
+      if (tasks.length === 0) {
+        container.innerHTML = '<p style="text-align: center; opacity: 0.8;">还没有添加任何任务</p>';
+        return;
+      }
+
+      container.innerHTML = tasks.map(task => `
+        <div class="reminder-task-item ${task.completed ? 'completed' : ''}"
+             data-task-id="${task.id}"
+             onclick="toggleTask(${task.id}, ${!task.completed})">
+          <input type="checkbox" class="reminder-task-checkbox"
+            ${task.completed ? 'checked' : ''}
+            onclick="event.stopPropagation(); toggleTask(${task.id}, ${!task.completed})">
+          <span class="reminder-task-title">${task.title}</span>
+          <span style="opacity: 0.7; font-size: 12px;">${getCategoryLabel(task.category)}</span>
+        </div>
+      `).join('');
+    }
+
+    async function toggleTask(taskId, completed) {
+      await window.api.toggleTask(taskId, formatDate(new Date()), completed);
+      await loadTasks();
+    }
+
+    function closeReminder() {
+      window.api.closeReminder();
+    }
+
+    function openMainWindow() {
+      window.api.openMainWindow();
+      window.api.closeReminder();
+    }
+
+    // 初始化
+    init();
+  </script>
+</body>
+</html>
