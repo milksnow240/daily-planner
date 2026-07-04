@@ -154,9 +154,8 @@ function getTasksByDate(date) {
 function toggleTaskCompletion(taskId, date, completed) {
   const completedAt = completed ? new Date().toISOString() : null;
 
-  // 使用 INSERT OR REPLACE 来实现 upsert
   db.run(`
-    INSERT INTO daily_records (date, task_id, completed, completed_at)
+    INSERT OR REPLACE INTO daily_records (date, task_id, completed, completed_at)
     VALUES (?, ?, ?, ?)
   `, [date, taskId, completed ? 1 : 0, completedAt]);
 
@@ -184,10 +183,10 @@ function getDailyStats(year, month) {
 function getDateStats(date) {
   const result = db.exec(`
     SELECT
-      COUNT(task_id) as total_tasks,
-      SUM(completed) as completed_tasks
-    FROM daily_records
-    WHERE date = ?
+      COUNT(t.id) as total_tasks,
+      SUM(CASE WHEN dr.completed = 1 THEN 1 ELSE 0 END) as completed_tasks
+    FROM tasks t
+    LEFT JOIN daily_records dr ON t.id = dr.task_id AND dr.date = ?
   `, [date]);
 
   const stats = resultToObject(result);

@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>每日计划</title>
   <link rel="stylesheet" href="styles.css">
+  <script src="api.js"></script>
 </head>
 <body>
   <div class="app-container">
@@ -29,10 +30,11 @@
         <button class="add-task-btn" id="addTaskBtn">添加任务</button>
       </div>
 
-      <!-- 任务列表 -->
-      <div class="tasks-section">
-        <h3>今日任务</h3>
-        <div class="task-list" id="taskList"></div>
+      <!-- 今日概览 -->
+      <div class="overview-section">
+        <h3 id="overviewTitle">今日概览</h3>
+        <div class="overview-total" id="overviewTotal"></div>
+        <div class="group-overview-list" id="groupOverview"></div>
       </div>
 
       <!-- 设置 -->
@@ -57,32 +59,45 @@
 
     <!-- 主内容 - 日历视图 -->
     <main class="main-content">
-      <div class="calendar-header">
-        <h2 class="calendar-title" id="calendarTitle">2024年1月</h2>
-        <div class="calendar-nav">
-          <button class="nav-btn" id="prevMonthBtn">◀ 上月</button>
-          <button class="nav-btn" id="todayBtn">今天</button>
-          <button class="nav-btn" id="nextMonthBtn">下月 ▶</button>
+      <section class="calendar-section collapsed" id="calendarSection">
+        <div class="calendar-header">
+          <div class="calendar-header-left">
+            <button class="collapse-btn" id="toggleCalendarBtn" type="button" title="展开/收起日历">
+              <span class="collapse-icon">▶</span>
+              <span class="collapse-label">展开日历</span>
+            </button>
+            <h2 class="calendar-title" id="calendarTitle">2024年1月</h2>
+          </div>
+          <div class="calendar-nav">
+            <button class="nav-btn" id="prevMonthBtn">◀ 上月</button>
+            <button class="nav-btn" id="todayBtn">今天</button>
+            <button class="nav-btn" id="nextMonthBtn">下月 ▶</button>
+          </div>
         </div>
-      </div>
 
-      <div class="calendar-grid">
-        <div class="calendar-weekdays">
-          <div class="weekday">周日</div>
-          <div class="weekday">周一</div>
-          <div class="weekday">周二</div>
-          <div class="weekday">周三</div>
-          <div class="weekday">周四</div>
-          <div class="weekday">周五</div>
-          <div class="weekday">周六</div>
+        <div class="calendar-body" id="calendarBody">
+          <div class="calendar-grid">
+            <div class="calendar-weekdays">
+              <div class="weekday">周日</div>
+              <div class="weekday">周一</div>
+              <div class="weekday">周二</div>
+              <div class="weekday">周三</div>
+              <div class="weekday">周四</div>
+              <div class="weekday">周五</div>
+              <div class="weekday">周六</div>
+            </div>
+            <div class="calendar-days" id="calendarDays"></div>
+          </div>
         </div>
-        <div class="calendar-days" id="calendarDays"></div>
-      </div>
+      </section>
 
-      <!-- 日期详情面板 -->
-      <div class="date-detail-panel" id="dateDetailPanel" style="display: none;">
+      <!-- 任务详情 -->
+      <div class="date-detail-panel" id="dateDetailPanel">
         <div class="detail-header">
-          <div class="detail-date" id="detailDate">2024年1月1日</div>
+          <div>
+            <div class="detail-panel-label">任务详情</div>
+            <div class="detail-date" id="detailDate">2024年1月1日</div>
+          </div>
           <div class="detail-stats">
             <div class="stat-item">
               <span class="stat-value" id="detailCompleted">0</span>
@@ -103,8 +118,9 @@
     // ==================== 状态管理 ====================
     let currentYear = new Date().getFullYear();
     let currentMonth = new Date().getMonth() + 1;
-    let selectedDate = null;
+    let selectedDate = formatDate(new Date());
     let dailyStats = {};
+    let currentTasks = [];
 
     // ==================== 工具函数 ====================
     function formatDate(date) {
@@ -137,11 +153,46 @@
       return category || 'general';
     }
 
+    function getTaskGroup(title) {
+      const match = title.match(/^\[([^\]]+)\]/);
+      if (!match) return '其他';
+      return match[1].split('·')[0];
+    }
+
+    function getProgressColor(rate) {
+      if (rate >= 100) return '#52c41a';
+      if (rate >= 50) return '#faad14';
+      return '#f5222d';
+    }
+
+    function stripGroupPrefix(title) {
+      return title.replace(/^\[[^\]]+\]\s*/, '');
+    }
+
+    function isTaskCompleted(task) {
+      return task.completed === 1 || task.completed === true;
+    }
+
+    function computeStats(tasks) {
+      return {
+        total_tasks: tasks.length,
+        completed_tasks: tasks.filter(isTaskCompleted).length
+      };
+    }
+
+    function updateViews(tasks, dateStr) {
+      const stats = computeStats(tasks);
+      currentTasks = tasks;
+      renderOverview(tasks, stats);
+      renderDetailTasks(tasks, dateStr, stats);
+    }
+
     // ==================== 初始化 ====================
     async function init() {
       updateTodayDate();
+      initCalendarCollapse();
       await loadSettings();
-      await loadTasks();
+      await refreshCurrentDate();
       await renderCalendar();
     }
 
@@ -159,30 +210,96 @@
       document.getElementById('reminderEnabled').checked = settings.reminder_enabled !== 'false';
     }
 
-    async function loadTasks() {
-      const tasks = await window.api.getTasksByDate(formatDate(new Date()));
-      renderTaskList(tasks);
+    async function refreshCurrentDate() {
+      const tasks = await window.api.getTasksByDate(selectedDate);
+      updateViews(tasks, selectedDate);
     }
 
-    // ==================== 任务列表渲染 ====================
-    function renderTaskList(tasks) {
-      const container = document.getElementById('taskList');
+    function renderOverview(tasks, stats) {
+      const total = stats.total_tasks || 0;
+      const completed = stats.completed_tasks || 0;
+      const rate = total > 0 ? Math.round(completed / total * 100) : 0;
+      const color = getProgressColor(rate);
+      const isToday = selectedDate === formatDate(new Date());
 
-      if (tasks.length === 0) {
-        container.innerHTML = '<p style="color: #999; text-align: center; padding: 20px;">暂无任务，添加一个吧！</p>';
+      document.getElementById('overviewTitle').textContent = isToday ? '今日概览' : '任务概览';
+
+      document.getElementById('overviewTotal').innerHTML = `
+        <div class="overview-ring" style="--progress: ${rate}; --ring-color: ${color}">
+          <span class="overview-ring-value">${rate}%</span>
+        </div>
+        <div class="overview-summary">
+          <div class="overview-count">${completed} / ${total}</div>
+          <div class="overview-label">任务已完成</div>
+        </div>
+      `;
+
+      const groups = {};
+      for (const task of tasks) {
+        const group = getTaskGroup(task.title);
+        if (!groups[group]) groups[group] = { total: 0, completed: 0 };
+        groups[group].total++;
+        if (isTaskCompleted(task)) groups[group].completed++;
+      }
+
+      const container = document.getElementById('groupOverview');
+      const entries = Object.entries(groups);
+
+      if (entries.length === 0) {
+        container.innerHTML = '<p class="overview-empty">暂无任务</p>';
         return;
       }
 
-      container.innerHTML = tasks.map(task => `
-        <div class="task-item" data-task-id="${task.id}">
-          <input type="checkbox" class="task-checkbox"
-            ${task.completed ? 'checked' : ''}
-            onchange="toggleTask(${task.id}, this.checked)">
-          <div class="task-info">
-            <div class="task-title ${task.completed ? 'completed' : ''}">${task.title}</div>
-            <div class="task-category ${getCategoryClass(task.category)}">${getCategoryLabel(task.category)}</div>
+      container.innerHTML = entries.map(([name, g]) => {
+        const groupRate = g.total > 0 ? Math.round(g.completed / g.total * 100) : 0;
+        const groupColor = getProgressColor(groupRate);
+        return `
+          <div class="group-overview-item">
+            <div class="group-overview-header">
+              <span class="group-name">${name}</span>
+              <span class="group-count">${g.completed}/${g.total}</span>
+            </div>
+            <div class="group-progress-bar">
+              <div class="group-progress-fill" style="width: ${groupRate}%; background: ${groupColor}"></div>
+            </div>
           </div>
-          <button class="delete-task-btn" onclick="deleteTask(${task.id})">删除</button>
+        `;
+      }).join('');
+    }
+
+    function renderDetailTasks(tasks, dateStr, stats) {
+      document.getElementById('detailDate').textContent = formatDateChinese(dateStr);
+      document.getElementById('detailCompleted').textContent = stats.completed_tasks;
+      document.getElementById('detailTotal').textContent = stats.total_tasks;
+
+      const container = document.getElementById('detailTasks');
+      if (tasks.length === 0) {
+        container.innerHTML = '<p class="detail-empty">暂无任务，可在左侧添加</p>';
+        return;
+      }
+
+      const groups = {};
+      for (const task of tasks) {
+        const group = getTaskGroup(task.title);
+        if (!groups[group]) groups[group] = [];
+        groups[group].push(task);
+      }
+
+      container.innerHTML = Object.entries(groups).map(([groupName, groupTasks]) => `
+        <div class="detail-group">
+          <div class="detail-group-title">${groupName}</div>
+          ${groupTasks.map(task => `
+            <div class="detail-task-item ${isTaskCompleted(task) ? 'completed' : ''}" data-task-id="${task.id}">
+              <input type="checkbox" class="task-checkbox"
+                ${isTaskCompleted(task) ? 'checked' : ''}
+                onchange="toggleTaskOnDate(${task.id}, '${dateStr}', this.checked)">
+              <div class="detail-task-info">
+                <span class="detail-task-title">${stripGroupPrefix(task.title)}</span>
+                <span class="task-category ${getCategoryClass(task.category)}">${getCategoryLabel(task.category)}</span>
+              </div>
+              <button class="delete-task-btn" onclick="deleteTask(${task.id})">删除</button>
+            </div>
+          `).join('')}
         </div>
       `).join('');
     }
@@ -199,26 +316,30 @@
 
       await window.api.addTask(title, category);
       input.value = '';
-      await loadTasks();
+      await refreshCurrentDate();
       await renderCalendar();
     }
 
-    async function toggleTask(taskId, completed) {
-      const date = formatDate(new Date());
-      await window.api.toggleTask(taskId, date, completed);
-      await loadTasks();
-      await renderCalendar();
+    async function toggleTaskOnDate(taskId, date, completed) {
+      const optimistic = currentTasks.map(t =>
+        t.id === taskId ? { ...t, completed: completed ? 1 : 0 } : t
+      );
+      updateViews(optimistic, date);
 
-      // 如果选中的是当前选中的日期，也更新详情面板
-      if (selectedDate === date) {
-        await showDateDetail(date);
+      try {
+        await window.api.toggleTask(taskId, date, completed);
+        await refreshCurrentDate();
+        await renderCalendar();
+      } catch (err) {
+        console.error(err);
+        await refreshCurrentDate();
       }
     }
 
     async function deleteTask(taskId) {
       if (!confirm('确定要删除这个任务吗？')) return;
       await window.api.deleteTask(taskId);
-      await loadTasks();
+      await refreshCurrentDate();
       await renderCalendar();
     }
 
@@ -295,40 +416,7 @@
     async function selectDate(dateStr) {
       selectedDate = dateStr;
       await renderCalendar();
-      await showDateDetail(dateStr);
-    }
-
-    async function showDateDetail(dateStr) {
-      const panel = document.getElementById('dateDetailPanel');
-      const tasks = await window.api.getTasksByDate(dateStr);
-      const stats = await window.api.getDateStats(dateStr);
-
-      document.getElementById('detailDate').textContent = formatDateChinese(dateStr);
-      document.getElementById('detailCompleted').textContent = stats.completed_tasks;
-      document.getElementById('detailTotal').textContent = stats.total_tasks;
-
-      const container = document.getElementById('detailTasks');
-      if (tasks.length === 0) {
-        container.innerHTML = '<p style="color: #999; text-align: center;">这天没有任务记录</p>';
-      } else {
-        container.innerHTML = tasks.map(task => `
-          <div class="detail-task-item ${task.completed ? 'completed' : ''}">
-            <input type="checkbox" class="task-checkbox"
-              ${task.completed ? 'checked' : ''}
-              onchange="toggleTaskOnDate(${task.id}, '${dateStr}', this.checked)">
-            <span class="detail-task-title">${task.title}</span>
-            <span class="task-category ${getCategoryClass(task.category)}">${getCategoryLabel(task.category)}</span>
-          </div>
-        `).join('');
-      }
-
-      panel.style.display = 'block';
-    }
-
-    async function toggleTaskOnDate(taskId, date, completed) {
-      await window.api.toggleTask(taskId, date, completed);
-      await showDateDetail(date);
-      await renderCalendar();
+      await refreshCurrentDate();
     }
 
     function changeMonth(delta) {
@@ -340,8 +428,6 @@
         currentMonth = 12;
         currentYear--;
       }
-      selectedDate = null;
-      document.getElementById('dateDetailPanel').style.display = 'none';
       renderCalendar();
     }
 
@@ -350,7 +436,6 @@
       currentYear = today.getFullYear();
       currentMonth = today.getMonth() + 1;
       selectDate(formatDate(today));
-      renderCalendar();
     }
 
     // ==================== 设置相关 ====================
@@ -368,6 +453,26 @@
       await window.api.testReminder();
     }
 
+    function toggleCalendar() {
+      const section = document.getElementById('calendarSection');
+      const collapsed = section.classList.toggle('collapsed');
+      const icon = document.querySelector('.collapse-icon');
+      const label = document.querySelector('.collapse-label');
+      icon.textContent = collapsed ? '▶' : '▼';
+      label.textContent = collapsed ? '展开日历' : '收起日历';
+      localStorage.setItem('calendarCollapsed', collapsed ? '1' : '0');
+    }
+
+    function initCalendarCollapse() {
+      const collapsed = localStorage.getItem('calendarCollapsed');
+      if (collapsed === '0') {
+        const section = document.getElementById('calendarSection');
+        section.classList.remove('collapsed');
+        document.querySelector('.collapse-icon').textContent = '▼';
+        document.querySelector('.collapse-label').textContent = '收起日历';
+      }
+    }
+
     // ==================== 事件绑定 ====================
     document.getElementById('addTaskBtn').addEventListener('click', addNewTask);
     document.getElementById('taskInput').addEventListener('keypress', (e) => {
@@ -379,6 +484,7 @@
     document.getElementById('reminderTime').addEventListener('change', saveReminderTime);
     document.getElementById('reminderEnabled').addEventListener('change', saveReminderEnabled);
     document.getElementById('testReminderBtn').addEventListener('click', testReminder);
+    document.getElementById('toggleCalendarBtn').addEventListener('click', toggleCalendar);
 
     // 启动
     init();
