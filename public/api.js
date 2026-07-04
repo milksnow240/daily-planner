@@ -1,4 +1,4 @@
-// 浏览器模式 API 桥接（Electron 环境下由 preload.js 提供 window.api）
+// 浏览器模式 API 桥接
 (function () {
   if (window.api) return;
 
