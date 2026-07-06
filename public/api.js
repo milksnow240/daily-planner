@@ -33,6 +33,25 @@
       method: 'POST',
       body: JSON.stringify({ key, value })
     }),
+    getPhases: () => request('/api/phases'),
+    getPhase: (id) => request(`/api/phases/${id}`),
+    addPhase: (data) => request('/api/phases', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    }),
+    updatePhase: (id, data) => request(`/api/phases/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data)
+    }),
+    deletePhase: (id) => request(`/api/phases/${id}`, { method: 'DELETE' }),
+    setPhaseMilestones: (phaseId, milestones) => request(`/api/phases/${phaseId}/milestones`, {
+      method: 'POST',
+      body: JSON.stringify({ milestones })
+    }),
+    togglePhaseMilestone: (milestoneId, completed) => request(`/api/phase-milestones/${milestoneId}/toggle`, {
+      method: 'POST',
+      body: JSON.stringify({ completed })
+    }),
     closeReminder: () => window.close(),
     openMainWindow: () => { window.location.href = '/'; },
     testReminder: () => request('/api/test-reminder', { method: 'POST' })

@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>阶段计划</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="api.js"></script>
+</head>
+<body>
+  <div class="app-container">
+    <aside class="sidebar">
+      <nav class="app-nav">
+        <a href="/" class="nav-link">每日计划</a>
+        <a href="/phases.html" class="nav-link active">阶段计划</a>
+      </nav>
+
+      <div class="sidebar-header">
+        <h1>🎯 阶段计划</h1>
+      </div>
+
+      <div class="phase-form">
+        <h3 id="formTitle">新建阶段任务</h3>
+        <input type="hidden" id="editId" value="">
+        <div class="task-input-wrapper">
+          <input type="text" class="task-input" id="phaseTitle" placeholder="任务名称，如：雅思冲刺 6.5">
+          <textarea class="phase-textarea" id="phaseDesc" placeholder="阶段目标或说明（可选）" rows="3"></textarea>
+          <div class="phase-date-row">
+            <label class="phase-field-label">
+              开始日期
+              <input type="date" class="task-input" id="phaseStart">
+            </label>
+            <label class="phase-field-label">
+              结束日期
+              <input type="date" class="task-input" id="phaseEnd">
+            </label>
+          </div>
+          <select class="category-select" id="phaseCategory">
+            <option value="study">学习</option>
+            <option value="work">工作</option>
+            <option value="life">生活</option>
+            <option value="general">其他</option>
+          </select>
+        </div>
+        <div class="phase-form-actions">
+          <button class="add-task-btn" id="savePhaseBtn">添加阶段任务</button>
+          <button class="nav-btn phase-cancel-btn" id="cancelEditBtn" style="display: none;">取消编辑</button>
+        </div>
+      </div>
+
+      <div class="overview-section">
+        <h3>筛选</h3>
+        <div class="phase-filter-tabs">
+          <button class="filter-tab active" data-filter="all">全部</button>
+          <button class="filter-tab" data-filter="active">进行中</button>
+          <button class="filter-tab" data-filter="upcoming">未开始</button>
+          <button class="filter-tab" data-filter="completed">已完成</button>
+        </div>
+        <div class="phase-sidebar-stats" id="phaseStats"></div>
+      </div>
+    </aside>
+
+    <main class="main-content">
+      <div class="phase-main-header">
+        <div>
+          <div class="detail-panel-label">长期目标</div>
+          <h2 class="phase-main-title">我的阶段任务</h2>
+        </div>
+        <div class="phase-header-count" id="phaseCount">0 个任务</div>
+      </div>
+
+      <div class="phase-list" id="phaseList">
+        <p class="detail-empty">暂无阶段任务，可在左侧添加</p>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    let allPhases = [];
+    let currentFilter = 'all';
+    const expandedMilestones = new Set();
+    const expandedStages = new Set();
+
+    function stageKey(phaseId, group) {
+      return `${phaseId}::${group.stage_index}::${group.stage_title}`;
+    }
+
+    function toggleMilestonesSection(phaseId) {
+      if (expandedMilestones.has(phaseId)) expandedMilestones.delete(phaseId);
+      else expandedMilestones.add(phaseId);
+      renderPhases();
+    }
+
+    function toggleStageGroup(key) {
+      if (expandedStages.has(key)) expandedStages.delete(key);
+      else expandedStages.add(key);
+      renderPhases();
+    }
+
+    function formatDateChinese(dateStr) {
+      const [y, m, d] = dateStr.split('-');
+      return `${y}年${parseInt(m)}月${parseInt(d)}日`;
+    }
+
+    function getCategoryLabel(category) {
+      const labels = { work: '工作', life: '生活', study: '学习', general: '其他' };
+      return labels[category] || '其他';
+    }
+
+    function getPhaseStatus(phase) {
+      const today = formatDate(new Date());
+      if (phase.progress >= 100) return 'completed';
+      if (today < phase.start_date) return 'upcoming';
+      if (today > phase.end_date) return 'overdue';
+      return 'active';
+    }
+
+    function getStatusLabel(status) {
+      const labels = {
+        active: '进行中',
+        upcoming: '未开始',
+        completed: '已完成',
+        overdue: '已逾期'
+      };
+      return labels[status] || status;
+    }
+
+    function formatDate(date) {
+      const y = date.getFullYear();
+      const m = String(date.getMonth() + 1).padStart(2, '0');
+      const d = String(date.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
+
+    function getDaysInfo(phase) {
+      const today = new Date(formatDate(new Date()));
+      const start = new Date(phase.start_date);
+      const end = new Date(phase.end_date);
+      const totalDays = Math.max(1, Math.round((end - start) / 86400000) + 1);
+      const elapsed = Math.round((today - start) / 86400000) + 1;
+      const remaining = Math.round((end - today) / 86400000);
+
+      if (getPhaseStatus(phase) === 'upcoming') {
+        const daysUntil = Math.round((start - today) / 86400000);
+        return `${daysUntil} 天后开始 · 共 ${totalDays} 天`;
+      }
+      if (getPhaseStatus(phase) === 'completed') {
+        return `已完成 · 共 ${totalDays} 天`;
+      }
+      if (remaining < 0) {
+        return `已超期 ${Math.abs(remaining)} 天 · 共 ${totalDays} 天`;
+      }
+      return `剩余 ${remaining} 天 · 第 ${Math.min(Math.max(elapsed, 1), totalDays)}/${totalDays} 天`;
+    }
+
+    function getTimeProgress(phase) {
+      const today = new Date(formatDate(new Date()));
+      const start = new Date(phase.start_date);
+      const end = new Date(phase.end_date);
+      if (today < start) return 0;
+      if (today > end) return 100;
+      const total = end - start;
+      if (total <= 0) return 100;
+      return Math.round(((today - start) / total) * 100);
+    }
+
+    function filterPhases(phases) {
+      if (currentFilter === 'all') return phases;
+      if (currentFilter === 'active') {
+        return phases.filter(p => {
+          const status = getPhaseStatus(p);
+          return status === 'active' || status === 'overdue';
+        });
+      }
+      return phases.filter(p => getPhaseStatus(p) === currentFilter);
+    }
+
+    function renderStats(phases) {
+      const stats = { all: phases.length, active: 0, upcoming: 0, completed: 0, overdue: 0 };
+      for (const p of phases) {
+        stats[getPhaseStatus(p)]++;
+      }
+
+      document.getElementById('phaseStats').innerHTML = `
+        <div class="phase-stat-grid">
+          <div class="phase-stat-item"><span class="phase-stat-num">${stats.active}</span><span>进行中</span></div>
+          <div class="phase-stat-item"><span class="phase-stat-num">${stats.upcoming}</span><span>未开始</span></div>
+          <div class="phase-stat-item"><span class="phase-stat-num">${stats.completed}</span><span>已完成</span></div>
+        </div>
+      `;
+    }
+
+    function getMilestoneStats(phase) {
+      const milestones = phase.milestones || [];
+      const completed = milestones.filter(m => m.completed === 1 || m.completed === true).length;
+      return { total: milestones.length, completed };
+    }
+
+    function groupMilestones(milestones) {
+      const groups = [];
+      const map = new Map();
+      for (const m of milestones || []) {
+        const key = `${m.stage_index}::${m.stage_title}`;
+        if (!map.has(key)) {
+          const group = { stage_index: m.stage_index, stage_title: m.stage_title, items: [] };
+          map.set(key, group);
+          groups.push(group);
+        }
+        map.get(key).items.push(m);
+      }
+      return groups;
+    }
+
+    function renderMilestones(phase) {
+      const groups = groupMilestones(phase.milestones);
+      if (groups.length === 0) {
+        return '<p class="phase-milestones-empty">暂无阶段目标</p>';
+      }
+
+      const sectionOpen = expandedMilestones.has(phase.id);
+
+      return groups.map(group => {
+        const key = stageKey(phase.id, group);
+        const open = sectionOpen && expandedStages.has(key);
+        const done = group.items.filter(m => m.completed === 1 || m.completed === true).length;
+
+        return `
+          <div class="phase-stage-group ${open ? '' : 'collapsed'}">
+            <button type="button" class="phase-stage-toggle" onclick="toggleStageGroup('${escapeAttr(key)}')">
+              <span class="collapse-icon">${open ? '▼' : '▶'}</span>
+              <span class="phase-stage-title">${escapeHtml(group.stage_title)}</span>
+              <span class="phase-stage-count">${done}/${group.items.length}</span>
+            </button>
+            <div class="phase-stage-items">
+              ${group.items.map(m => `
+                <label class="phase-milestone-item ${m.completed ? 'completed' : ''}">
+                  <input type="checkbox" class="task-checkbox"
+                    ${m.completed ? 'checked' : ''}
+                    onchange="toggleMilestone(${m.id}, ${phase.id}, this.checked)">
+                  <span class="phase-milestone-text">${escapeHtml(m.title)}</span>
+                </label>
+              `).join('')}
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function renderPhases() {
+      const filtered = filterPhases(allPhases);
+      const container = document.getElementById('phaseList');
+      document.getElementById('phaseCount').textContent = `${filtered.length} 个任务`;
+
+      if (filtered.length === 0) {
+        container.innerHTML = '<p class="detail-empty">暂无符合条件的阶段任务</p>';
+        return;
+      }
+
+      container.innerHTML = filtered.map(phase => {
+        const status = getPhaseStatus(phase);
+        const timeProgress = getTimeProgress(phase);
+        const ms = getMilestoneStats(phase);
+        const progressLabel = ms.total > 0
+          ? `完成进度 ${phase.progress}%（${ms.completed}/${ms.total}）`
+          : `完成进度 ${phase.progress}%`;
+        const milestonesOpen = expandedMilestones.has(phase.id);
+
+        return `
+          <div class="phase-card status-${status}" data-id="${phase.id}">
+            <div class="phase-card-header">
+              <div class="phase-card-title-row">
+                <h3 class="phase-card-title">${escapeHtml(phase.title)}</h3>
+                <span class="phase-status-badge ${status}">${getStatusLabel(status)}</span>
+              </div>
+              <div class="phase-card-meta">
+                <span class="task-category ${phase.category}">${getCategoryLabel(phase.category)}</span>
+                <span class="phase-date-range">${formatDateChinese(phase.start_date)} — ${formatDateChinese(phase.end_date)}</span>
+              </div>
+              ${phase.description ? `<p class="phase-card-desc">${escapeHtml(phase.description)}</p>` : ''}
+            </div>
+
+            <div class="phase-progress-section">
+              <div class="phase-progress-labels">
+                <span>${progressLabel}</span>
+                <span>${getDaysInfo(phase)}</span>
+              </div>
+              <div class="group-progress-bar phase-progress-bar">
+                <div class="group-progress-fill" style="width: ${phase.progress}%; background: var(--primary-color)"></div>
+              </div>
+            </div>
+
+            <div class="phase-timeline-section">
+              <div class="phase-timeline-labels">
+                <span>时间进度</span>
+                <span>${timeProgress}%</span>
+              </div>
+              <div class="group-progress-bar">
+                <div class="group-progress-fill" style="width: ${timeProgress}%; background: #faad14"></div>
+              </div>
+            </div>
+
+            <div class="phase-milestones-section ${milestonesOpen ? '' : 'collapsed'}">
+              <button type="button" class="phase-milestones-toggle" onclick="toggleMilestonesSection(${phase.id})">
+                <span class="collapse-icon">${milestonesOpen ? '▼' : '▶'}</span>
+                <span>阶段目标</span>
+                ${ms.total > 0 ? `<span class="phase-milestones-summary">${ms.completed}/${ms.total} 已完成</span>` : ''}
+              </button>
+              <div class="phase-milestones-body">
+                ${renderMilestones(phase)}
+              </div>
+            </div>
+
+            <div class="phase-card-actions">
+              <button class="nav-btn" onclick="editPhase(${phase.id})">编辑</button>
+              <button class="delete-task-btn phase-delete-btn" onclick="removePhase(${phase.id})">删除</button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    function escapeAttr(text) {
+      return String(text).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    }
+
+    async function loadPhases() {
+      allPhases = await window.api.getPhases();
+      renderStats(allPhases);
+      renderPhases();
+    }
+
+    function resetForm() {
+      document.getElementById('editId').value = '';
+      document.getElementById('phaseTitle').value = '';
+      document.getElementById('phaseDesc').value = '';
+      document.getElementById('phaseStart').value = '';
+      document.getElementById('phaseEnd').value = '';
+      document.getElementById('phaseCategory').value = 'study';
+      document.getElementById('formTitle').textContent = '新建阶段任务';
+      document.getElementById('savePhaseBtn').textContent = '添加阶段任务';
+      document.getElementById('cancelEditBtn').style.display = 'none';
+    }
+
+    async function savePhase() {
+      const title = document.getElementById('phaseTitle').value.trim();
+      const description = document.getElementById('phaseDesc').value.trim();
+      const start_date = document.getElementById('phaseStart').value;
+      const end_date = document.getElementById('phaseEnd').value;
+      const category = document.getElementById('phaseCategory').value;
+      const editId = document.getElementById('editId').value;
+
+      if (!title) {
+        alert('请输入任务名称');
+        return;
+      }
+      if (!start_date || !end_date) {
+        alert('请选择开始和结束日期');
+        return;
+      }
+      if (start_date > end_date) {
+        alert('结束日期不能早于开始日期');
+        return;
+      }
+
+      if (editId) {
+        const existing = allPhases.find(p => p.id === parseInt(editId));
+        await window.api.updatePhase(parseInt(editId), {
+          title,
+          description,
+          start_date,
+          end_date,
+          category,
+          progress: existing ? existing.progress : 0
+        });
+      } else {
+        await window.api.addPhase({ title, description, start_date, end_date, category, progress: 0 });
+      }
+
+      resetForm();
+      await loadPhases();
+    }
+
+    function editPhase(id) {
+      const phase = allPhases.find(p => p.id === id);
+      if (!phase) return;
+
+      document.getElementById('editId').value = id;
+      document.getElementById('phaseTitle').value = phase.title;
+      document.getElementById('phaseDesc').value = phase.description || '';
+      document.getElementById('phaseStart').value = phase.start_date;
+      document.getElementById('phaseEnd').value = phase.end_date;
+      document.getElementById('phaseCategory').value = phase.category;
+      document.getElementById('formTitle').textContent = '编辑阶段任务';
+      document.getElementById('savePhaseBtn').textContent = '保存修改';
+      document.getElementById('cancelEditBtn').style.display = 'block';
+      document.querySelector('.sidebar').scrollTop = 0;
+    }
+
+    async function removePhase(id) {
+      if (!confirm('确定要删除这个阶段任务吗？')) return;
+      await window.api.deletePhase(id);
+      if (parseInt(document.getElementById('editId').value) === id) resetForm();
+      await loadPhases();
+    }
+
+    async function toggleMilestone(milestoneId, phaseId, completed) {
+      await window.api.togglePhaseMilestone(milestoneId, completed);
+      await loadPhases();
+    }
+
+    document.getElementById('savePhaseBtn').addEventListener('click', savePhase);
+    document.getElementById('cancelEditBtn').addEventListener('click', resetForm);
+
+    document.querySelectorAll('.filter-tab').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.filter-tab').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentFilter = btn.dataset.filter;
+        renderPhases();
+      });
+    });
+
+    loadPhases();
+  </script>
+</body>
+</html>

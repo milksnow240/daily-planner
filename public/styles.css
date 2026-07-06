@@ -132,6 +132,38 @@ body {
   color: var(--primary-color);
 }
 
+/* 顶部导航 */
+.app-nav {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+  padding: 4px;
+  background: var(--bg-color);
+  border-radius: 10px;
+}
+
+.nav-link {
+  flex: 1;
+  text-align: center;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  text-decoration: none;
+  transition: all 0.2s;
+}
+
+.nav-link:hover {
+  color: var(--primary-color);
+  background: rgba(74, 144, 217, 0.08);
+}
+
+.nav-link.active {
+  background: var(--primary-color);
+  color: white;
+}
+
 .today-date {
   font-size: 14px;
   color: var(--text-secondary);
@@ -798,6 +830,416 @@ body {
 .reminder-btn.secondary {
   background: rgba(255, 255, 255, 0.2);
   color: white;
+}
+
+/* ==================== 阶段计划 ==================== */
+.phase-form h3 {
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.phase-textarea {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: inherit;
+  resize: vertical;
+  outline: none;
+}
+
+.phase-textarea:focus {
+  border-color: var(--primary-color);
+}
+
+.phase-date-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.phase-field-label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.phase-form-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.phase-cancel-btn {
+  width: 100%;
+}
+
+.phase-filter-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+
+.filter-tab {
+  padding: 6px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  background: white;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.filter-tab:hover,
+.filter-tab.active {
+  background: var(--primary-color);
+  color: white;
+  border-color: var(--primary-color);
+}
+
+.phase-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.phase-stat-item {
+  text-align: center;
+  padding: 10px 6px;
+  background: var(--bg-color);
+  border-radius: 8px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.phase-stat-num {
+  display: block;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--primary-color);
+  line-height: 1.3;
+}
+
+.phase-main-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+  flex-shrink: 0;
+}
+
+.phase-main-title {
+  font-size: 22px;
+  font-weight: 600;
+}
+
+.phase-header-count {
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.phase-list {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 0;
+  padding-right: 4px;
+}
+
+.phase-card {
+  background: var(--card-bg);
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: var(--shadow);
+  border-left: 4px solid var(--primary-color);
+}
+
+.phase-card.status-upcoming {
+  border-left-color: #bfbfbf;
+}
+
+.phase-card.status-completed {
+  border-left-color: var(--success-color);
+}
+
+.phase-card.status-overdue {
+  border-left-color: var(--danger-color);
+}
+
+.phase-card-header {
+  margin-bottom: 16px;
+}
+
+.phase-card-title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.phase-card-title {
+  font-size: 18px;
+  font-weight: 600;
+  word-break: break-word;
+}
+
+.phase-status-badge {
+  flex-shrink: 0;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.phase-status-badge.active {
+  background: rgba(74, 144, 217, 0.15);
+  color: var(--primary-color);
+}
+
+.phase-status-badge.upcoming {
+  background: #f0f0f0;
+  color: #888;
+}
+
+.phase-status-badge.completed {
+  background: rgba(82, 196, 26, 0.15);
+  color: var(--success-color);
+}
+
+.phase-status-badge.overdue {
+  background: rgba(245, 34, 45, 0.12);
+  color: var(--danger-color);
+}
+
+.phase-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.phase-date-range {
+  color: var(--text-secondary);
+}
+
+.phase-card-desc {
+  margin-top: 10px;
+  font-size: 14px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.phase-progress-section,
+.phase-timeline-section {
+  margin-bottom: 14px;
+}
+
+.phase-progress-labels,
+.phase-timeline-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+
+.phase-progress-bar {
+  margin-bottom: 0;
+}
+
+.phase-milestones-section {
+  margin-bottom: 14px;
+  padding-top: 4px;
+}
+
+.phase-milestones-toggle,
+.phase-stage-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+}
+
+.phase-milestones-toggle {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--primary-color);
+  margin-bottom: 12px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.phase-milestones-toggle:hover,
+.phase-stage-toggle:hover {
+  color: var(--primary-color);
+}
+
+.phase-milestones-summary {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.phase-milestones-body {
+  overflow: hidden;
+  transition: max-height 0.25s ease, opacity 0.2s ease;
+  max-height: 5000px;
+  opacity: 1;
+}
+
+.phase-milestones-section.collapsed .phase-milestones-body {
+  max-height: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.phase-milestones-section.collapsed .phase-milestones-toggle {
+  margin-bottom: 0;
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.phase-milestones-heading {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--primary-color);
+  margin-bottom: 12px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.phase-milestones-empty {
+  font-size: 13px;
+  color: #999;
+  text-align: center;
+  padding: 12px 0;
+}
+
+.phase-stage-group {
+  margin-bottom: 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--bg-color);
+}
+
+.phase-stage-group:last-child {
+  margin-bottom: 0;
+}
+
+.phase-stage-toggle {
+  padding: 10px 12px;
+  background: var(--bg-color);
+}
+
+.phase-stage-toggle .phase-stage-title {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.5;
+  margin-bottom: 0;
+}
+
+.phase-stage-count {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.phase-stage-items {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0 8px 8px;
+  overflow: hidden;
+  transition: max-height 0.25s ease, opacity 0.2s ease, padding 0.25s ease;
+  max-height: 2000px;
+  opacity: 1;
+}
+
+.phase-stage-group.collapsed .phase-stage-items {
+  max-height: 0;
+  opacity: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  pointer-events: none;
+}
+
+.phase-stage-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+  line-height: 1.5;
+}
+
+.phase-milestone-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--card-bg);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.phase-milestone-item:hover {
+  background: #ececec;
+}
+
+.phase-milestone-item.completed {
+  opacity: 0.75;
+}
+
+.phase-milestone-item.completed .phase-milestone-text {
+  text-decoration: line-through;
+  color: var(--text-secondary);
+}
+
+.phase-milestone-text {
+  flex: 1;
+  font-size: 14px;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.phase-progress-slider {
+  width: 100%;
+  accent-color: var(--primary-color);
+  cursor: pointer;
+}
+
+.phase-card-actions {
+  display: flex;
+  gap: 10px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-color);
+}
+
+.phase-delete-btn {
+  opacity: 1;
 }
 
 /* ==================== 响应式 ==================== */

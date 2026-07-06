@@ -64,9 +64,38 @@ async function initDatabase() {
     )
   `);
 
+  // 创建阶段任务表
+  db.run(`
+    CREATE TABLE IF NOT EXISTS phase_tasks (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT NOT NULL,
+      description TEXT DEFAULT '',
+      start_date TEXT NOT NULL,
+      end_date TEXT NOT NULL,
+      category TEXT DEFAULT 'study',
+      progress INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  // 创建阶段目标（里程碑）表
+  db.run(`
+    CREATE TABLE IF NOT EXISTS phase_milestones (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      phase_id INTEGER NOT NULL,
+      stage_index INTEGER NOT NULL DEFAULT 0,
+      stage_title TEXT NOT NULL DEFAULT '',
+      title TEXT NOT NULL,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      completed INTEGER DEFAULT 0,
+      completed_at DATETIME,
+      FOREIGN KEY (phase_id) REFERENCES phase_tasks(id)
+    )
+  `);
+
   // 初始化默认设置
   const defaultSettings = [
-    ['reminder_time', '21:30'],
+    ['reminder_time', '09:25'],
     ['reminder_enabled', 'true']
   ];
 
@@ -196,6 +225,171 @@ function getDateStats(date) {
   };
 }
 
+// ==================== 阶段任务操作 ====================
+
+function getMilestonesByPhaseId(phaseId) {
+  const result = db.exec(`
+    SELECT * FROM phase_milestones
+    WHERE phase_id = ?
+    ORDER BY stage_index ASC, sort_order ASC
+  `, [phaseId]);
+  return resultToArray(result);
+}
+
+function getMilestoneById(id) {
+  const result = db.exec('SELECT * FROM phase_milestones WHERE id = ?', [id]);
+  return resultToObject(result);
+}
+
+function calculateProgressFromMilestones(milestones) {
+  if (!milestones.length) return 0;
+  const completed = milestones.filter(m => m.completed === 1 || m.completed === true).length;
+  return Math.round(completed / milestones.length * 100);
+}
+
+function syncPhaseProgress(phaseId) {
+  const milestones = getMilestonesByPhaseId(phaseId);
+  const progress = calculateProgressFromMilestones(milestones);
+  db.run('UPDATE phase_tasks SET progress = ? WHERE id = ?', [progress, phaseId]);
+  saveDatabase();
+  return progress;
+}
+
+function enrichPhase(phase) {
+  const milestones = getMilestonesByPhaseId(phase.id);
+  const progress = milestones.length > 0
+    ? calculateProgressFromMilestones(milestones)
+    : (phase.progress || 0);
+
+  if (milestones.length > 0 && progress !== phase.progress) {
+    db.run('UPDATE phase_tasks SET progress = ? WHERE id = ?', [progress, phase.id]);
+    saveDatabase();
+  }
+
+  return { ...phase, progress, milestones };
+}
+
+function getAllPhases() {
+  const result = db.exec('SELECT * FROM phase_tasks ORDER BY start_date ASC, created_at DESC');
+  return resultToArray(result).map(enrichPhase);
+}
+
+function getPhaseById(id) {
+  const result = db.exec('SELECT * FROM phase_tasks WHERE id = ?', [id]);
+  const phase = resultToObject(result);
+  return phase ? enrichPhase(phase) : null;
+}
+
+function addPhase({ title, description = '', start_date, end_date, category = 'study', progress = 0 }) {
+  db.run(
+    'INSERT INTO phase_tasks (title, description, start_date, end_date, category, progress) VALUES (?, ?, ?, ?, ?, ?)',
+    [title, description, start_date, end_date, category, progress]
+  );
+  const lastId = db.exec('SELECT last_insert_rowid() as id')[0].values[0][0];
+  saveDatabase();
+  return getPhaseById(lastId);
+}
+
+function updatePhase(id, { title, description, start_date, end_date, category, progress }) {
+  const existing = getPhaseById(id);
+  if (!existing) return null;
+
+  const milestones = existing.milestones || [];
+  const resolvedProgress = milestones.length > 0
+    ? calculateProgressFromMilestones(milestones)
+    : (progress ?? existing.progress);
+
+  db.run(
+    `UPDATE phase_tasks SET
+      title = ?,
+      description = ?,
+      start_date = ?,
+      end_date = ?,
+      category = ?,
+      progress = ?
+    WHERE id = ?`,
+    [
+      title ?? existing.title,
+      description ?? existing.description,
+      start_date ?? existing.start_date,
+      end_date ?? existing.end_date,
+      category ?? existing.category,
+      resolvedProgress,
+      id
+    ]
+  );
+  saveDatabase();
+  return getPhaseById(id);
+}
+
+function deletePhase(id) {
+  db.run('DELETE FROM phase_milestones WHERE phase_id = ?', [id]);
+  db.run('DELETE FROM phase_tasks WHERE id = ?', [id]);
+  saveDatabase();
+  return true;
+}
+
+function bulkSetMilestones(phaseId, milestones) {
+  db.run('DELETE FROM phase_milestones WHERE phase_id = ?', [phaseId]);
+  milestones.forEach((m, index) => {
+    db.run(
+      `INSERT INTO phase_milestones (phase_id, stage_index, stage_title, title, sort_order, completed)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [
+        phaseId,
+        m.stage_index,
+        m.stage_title,
+        m.title,
+        m.sort_order ?? index,
+        m.completed ? 1 : 0
+      ]
+    );
+  });
+  syncPhaseProgress(phaseId);
+  saveDatabase();
+  return getPhaseById(phaseId);
+}
+
+function toggleMilestone(milestoneId, completed) {
+  const existing = getMilestoneById(milestoneId);
+  if (!existing) return null;
+
+  const completedAt = completed ? new Date().toISOString() : null;
+  db.run(
+    'UPDATE phase_milestones SET completed = ?, completed_at = ? WHERE id = ?',
+    [completed ? 1 : 0, completedAt, milestoneId]
+  );
+  const progress = syncPhaseProgress(existing.phase_id);
+  saveDatabase();
+  return {
+    ...getMilestoneById(milestoneId),
+    phase_progress: progress
+  };
+}
+
+function addMilestone(phaseId, { stage_index, stage_title, title, sort_order }) {
+  const milestones = getMilestonesByPhaseId(phaseId);
+  const order = sort_order ?? milestones.length;
+  db.run(
+    `INSERT INTO phase_milestones (phase_id, stage_index, stage_title, title, sort_order, completed)
+     VALUES (?, ?, ?, ?, ?, 0)`,
+    [phaseId, stage_index ?? 0, stage_title ?? '', title, order]
+  );
+  syncPhaseProgress(phaseId);
+  saveDatabase();
+  const lastId = db.exec('SELECT last_insert_rowid() as id')[0].values[0][0];
+  return getMilestoneById(lastId);
+}
+
+function deleteMilestone(milestoneId) {
+  const existing = getMilestoneById(milestoneId);
+  if (!existing) return false;
+  db.run('DELETE FROM phase_milestones WHERE id = ?', [milestoneId]);
+  syncPhaseProgress(existing.phase_id);
+  saveDatabase();
+  return true;
+}
+
 // ==================== 设置操作 ====================
 
 function getSetting(key) {
@@ -245,6 +439,16 @@ module.exports = {
   toggleTaskCompletion,
   getDailyStats,
   getDateStats,
+  getAllPhases,
+  getPhaseById,
+  addPhase,
+  updatePhase,
+  deletePhase,
+  getMilestonesByPhaseId,
+  bulkSetMilestones,
+  toggleMilestone,
+  addMilestone,
+  deleteMilestone,
   getSetting,
   setSetting,
   getAllSettings,

@@ -11,6 +11,10 @@
   <div class="app-container">
     <!-- 侧边栏 - 任务管理 -->
     <aside class="sidebar">
+      <nav class="app-nav">
+        <a href="/" class="nav-link active">每日计划</a>
+        <a href="/phases.html" class="nav-link">阶段计划</a>
+      </nav>
       <div class="sidebar-header">
         <h1>📋 每日计划</h1>
       </div>
@@ -42,7 +46,7 @@
         <h3>设置</h3>
         <div class="setting-item">
           <span class="setting-label">提醒时间</span>
-          <input type="time" class="setting-input" id="reminderTime" value="21:30">
+          <input type="time" class="setting-input" id="reminderTime" value="09:25">
         </div>
         <div class="setting-item">
           <span class="setting-label">启用提醒</span>
@@ -206,7 +210,7 @@
 
     async function loadSettings() {
       const settings = await window.api.getSettings();
-      document.getElementById('reminderTime').value = settings.reminder_time || '21:30';
+      document.getElementById('reminderTime').value = settings.reminder_time || '09:25';
       document.getElementById('reminderEnabled').checked = settings.reminder_enabled !== 'false';
     }
 

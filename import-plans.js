@@ -68,6 +68,31 @@ function parseChecklist(content) {
   return tasks;
 }
 
+function parseOverrideChecklist(content) {
+  const tasks = [];
+  for (const line of normalize(content).split('\n')) {
+    const m = line.match(/^-\s*\[[ x]\]\s*(.+)$/);
+    if (m) tasks.push(m[1].trim());
+  }
+  return tasks;
+}
+
+function getTodayDateStr() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+}
+
+function loadDateOverrideTasks() {
+  const overrideFile = path.join(PLANS_DIR, `${getTodayDateStr()}.md`);
+  if (!fs.existsSync(overrideFile)) return null;
+
+  const content = fs.readFileSync(overrideFile, 'utf8');
+  const items = parseOverrideChecklist(content);
+  if (items.length === 0) return null;
+
+  return items.map(title => ({ title, category: 'study' }));
+}
+
 function getTodayDayPattern() {
   const now = new Date();
   const month = now.getMonth() + 1;
@@ -87,7 +112,10 @@ function parseTodaySection(content) {
 }
 
 function extractTasksFromPlans() {
-  const files = fs.readdirSync(PLANS_DIR).filter(f => f.endsWith('.md'));
+  const overrideTasks = loadDateOverrideTasks();
+  if (overrideTasks) return overrideTasks;
+
+  const files = fs.readdirSync(PLANS_DIR).filter(f => /^\D/.test(f) && f.endsWith('.md'));
   const allTasks = [];
 
   for (const file of files) {

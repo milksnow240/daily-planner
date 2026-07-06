@@ -22,7 +22,7 @@ function startScheduler(callback) {
   }
 
   reminderCallback = callback;
-  const reminderTime = getSetting('reminder_time') || '21:30';
+  const reminderTime = getSetting('reminder_time') || '09:25';
   const enabled = getSetting('reminder_enabled') !== 'false';
 
   if (!enabled) {
