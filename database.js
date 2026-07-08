@@ -375,10 +375,34 @@ function addMilestone(phaseId, { stage_index, stage_title, title, sort_order }) 
      VALUES (?, ?, ?, ?, ?, 0)`,
     [phaseId, stage_index ?? 0, stage_title ?? '', title, order]
   );
+  const lastId = db.exec('SELECT last_insert_rowid() as id')[0].values[0][0];
   syncPhaseProgress(phaseId);
   saveDatabase();
-  const lastId = db.exec('SELECT last_insert_rowid() as id')[0].values[0][0];
   return getMilestoneById(lastId);
+}
+
+function updateMilestone(milestoneId, { title, stage_index, stage_title }) {
+  const existing = getMilestoneById(milestoneId);
+  if (!existing) return null;
+
+  const nextTitle = (title ?? existing.title).trim();
+  if (!nextTitle) return null;
+
+  db.run(
+    `UPDATE phase_milestones SET title = ?, stage_index = ?, stage_title = ? WHERE id = ?`,
+    [
+      nextTitle,
+      stage_index ?? existing.stage_index,
+      stage_title ?? existing.stage_title,
+      milestoneId
+    ]
+  );
+  const progress = syncPhaseProgress(existing.phase_id);
+  saveDatabase();
+  return {
+    ...getMilestoneById(milestoneId),
+    phase_progress: progress
+  };
 }
 
 function deleteMilestone(milestoneId) {
@@ -448,6 +472,7 @@ module.exports = {
   bulkSetMilestones,
   toggleMilestone,
   addMilestone,
+  updateMilestone,
   deleteMilestone,
   getSetting,
   setSetting,

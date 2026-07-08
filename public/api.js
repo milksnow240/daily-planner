@@ -52,6 +52,15 @@
       method: 'POST',
       body: JSON.stringify({ completed })
     }),
+    updatePhaseMilestone: (milestoneId, data) => request(`/api/phase-milestones/${milestoneId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data)
+    }),
+    deletePhaseMilestone: (milestoneId) => request(`/api/phase-milestones/${milestoneId}`, { method: 'DELETE' }),
+    addPhaseMilestone: (phaseId, data) => request(`/api/phases/${phaseId}/milestones/add`, {
+      method: 'POST',
+      body: JSON.stringify(data)
+    }),
     closeReminder: () => window.close(),
     openMainWindow: () => { window.location.href = '/'; },
     testReminder: () => request('/api/test-reminder', { method: 'POST' })

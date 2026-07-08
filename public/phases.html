@@ -78,6 +78,8 @@
   <script>
     let allPhases = [];
     let currentFilter = 'all';
+    let editingMilestoneId = null;
+    let addingMilestoneKey = null;
     const expandedMilestones = new Set();
     const expandedStages = new Set();
 
@@ -213,16 +215,17 @@
 
     function renderMilestones(phase) {
       const groups = groupMilestones(phase.milestones);
-      if (groups.length === 0) {
-        return '<p class="phase-milestones-empty">暂无阶段目标</p>';
-      }
-
       const sectionOpen = expandedMilestones.has(phase.id);
 
-      return groups.map(group => {
+      if (groups.length === 0) {
+        return renderEmptyMilestones(phase);
+      }
+
+      const groupsHtml = groups.map(group => {
         const key = stageKey(phase.id, group);
         const open = sectionOpen && expandedStages.has(key);
         const done = group.items.filter(m => m.completed === 1 || m.completed === true).length;
+        const adding = addingMilestoneKey === key;
 
         return `
           <div class="phase-stage-group ${open ? '' : 'collapsed'}">
@@ -232,18 +235,112 @@
               <span class="phase-stage-count">${done}/${group.items.length}</span>
             </button>
             <div class="phase-stage-items">
-              ${group.items.map(m => `
-                <label class="phase-milestone-item ${m.completed ? 'completed' : ''}">
-                  <input type="checkbox" class="task-checkbox"
-                    ${m.completed ? 'checked' : ''}
-                    onchange="toggleMilestone(${m.id}, ${phase.id}, this.checked)">
-                  <span class="phase-milestone-text">${escapeHtml(m.title)}</span>
-                </label>
-              `).join('')}
+              ${group.items.map(m => renderMilestoneItem(m, phase.id)).join('')}
+              ${adding ? renderAddMilestoneRow(phase.id, group.stage_index, group.stage_title) : ''}
+              ${open ? `<button type="button" class="phase-milestone-add-btn" onclick="startAddMilestone('${escapeAttr(key)}')">+ 添加小任务</button>` : ''}
             </div>
           </div>
         `;
       }).join('');
+
+      return groupsHtml + renderNewStageAdd(phase);
+    }
+
+    function renderEmptyMilestones(phase) {
+      const key = `new-${phase.id}`;
+      if (addingMilestoneKey === key) {
+        return `
+          <div class="phase-milestone-add-form">
+            <input type="text" class="phase-milestone-input" id="milestone-stage-new-${phase.id}" placeholder="阶段分组名称（如：第一阶段）">
+            <input type="text" class="phase-milestone-input" id="milestone-add-new-${phase.id}" placeholder="小任务内容"
+              onkeydown="handleNewMilestoneKey(event, ${phase.id}, true)">
+            <div class="phase-milestone-item-actions">
+              <button type="button" class="nav-btn phase-milestone-save" onclick="saveNewMilestone(${phase.id}, true)">添加</button>
+              <button type="button" class="nav-btn phase-milestone-cancel" onclick="cancelAddMilestone()">取消</button>
+            </div>
+          </div>
+        `;
+      }
+
+      return `
+        <p class="phase-milestones-empty">暂无阶段目标</p>
+        <button type="button" class="phase-milestone-add-btn" onclick="startAddMilestone('new-${phase.id}')">+ 添加小任务</button>
+      `;
+    }
+
+    function renderNewStageAdd(phase) {
+      const key = `newstage-${phase.id}`;
+      if (addingMilestoneKey === key) {
+        const nextIndex = getNextStageIndex(phase);
+        return `
+          <div class="phase-milestone-add-form phase-new-stage-form">
+            <input type="text" class="phase-milestone-input" id="milestone-stage-newstage-${phase.id}" placeholder="新阶段分组名称">
+            <input type="text" class="phase-milestone-input" id="milestone-add-newstage-${phase.id}" placeholder="小任务内容"
+              onkeydown="handleNewMilestoneKey(event, ${phase.id}, false, ${nextIndex}, null, true)">
+            <div class="phase-milestone-item-actions">
+              <button type="button" class="nav-btn phase-milestone-save" onclick="saveNewMilestone(${phase.id}, false, null, false, true)">添加</button>
+              <button type="button" class="nav-btn phase-milestone-cancel" onclick="cancelAddMilestone()">取消</button>
+            </div>
+          </div>
+        `;
+      }
+
+      return `
+        <button type="button" class="phase-milestone-add-btn phase-new-stage-btn" onclick="startAddMilestone('newstage-${phase.id}')">+ 添加新阶段分组</button>
+      `;
+    }
+
+    function getNextStageIndex(phase) {
+      const milestones = phase.milestones || [];
+      if (milestones.length === 0) return 0;
+      return Math.max(...milestones.map(m => m.stage_index)) + 1;
+    }
+
+    function renderAddMilestoneRow(phaseId, stageIndex, stageTitle) {
+      return `
+        <div class="phase-milestone-item adding">
+          <input type="text" class="phase-milestone-input" id="milestone-add-${phaseId}-${stageIndex}" placeholder="输入小任务内容"
+            onkeydown="handleNewMilestoneKey(event, ${phaseId}, false, ${stageIndex}, '${escapeAttr(stageTitle)}')">
+          <div class="phase-milestone-item-actions">
+            <button type="button" class="nav-btn phase-milestone-save" onclick="saveNewMilestone(${phaseId}, false, '${escapeAttr(stageTitle)}', false, ${stageIndex})">添加</button>
+            <button type="button" class="nav-btn phase-milestone-cancel" onclick="cancelAddMilestone()">取消</button>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderMilestoneItem(milestone, phaseId) {
+      const completed = milestone.completed === 1 || milestone.completed === true;
+
+      if (editingMilestoneId === milestone.id) {
+        return `
+          <div class="phase-milestone-item editing ${completed ? 'completed' : ''}">
+            <input type="checkbox" class="task-checkbox"
+              ${completed ? 'checked' : ''}
+              onchange="toggleMilestone(${milestone.id}, ${phaseId}, this.checked)">
+            <input type="text" class="phase-milestone-input" id="milestone-edit-${milestone.id}"
+              value="${escapeHtmlAttr(milestone.title)}"
+              onkeydown="handleMilestoneEditKey(event, ${milestone.id}, ${phaseId})">
+            <div class="phase-milestone-item-actions">
+              <button type="button" class="nav-btn phase-milestone-save" onclick="saveMilestoneEdit(${milestone.id}, ${phaseId})">保存</button>
+              <button type="button" class="nav-btn phase-milestone-cancel" onclick="cancelMilestoneEdit()">取消</button>
+            </div>
+          </div>
+        `;
+      }
+
+      return `
+        <div class="phase-milestone-item ${completed ? 'completed' : ''}">
+          <input type="checkbox" class="task-checkbox"
+            ${completed ? 'checked' : ''}
+            onchange="toggleMilestone(${milestone.id}, ${phaseId}, this.checked)">
+          <span class="phase-milestone-text" onclick="startMilestoneEdit(${milestone.id})" title="点击编辑">${escapeHtml(milestone.title)}</span>
+          <div class="phase-milestone-item-actions">
+            <button type="button" class="phase-milestone-edit-btn" onclick="startMilestoneEdit(${milestone.id})">编辑</button>
+            <button type="button" class="phase-milestone-delete-btn" onclick="removeMilestone(${milestone.id}, ${phaseId})">删除</button>
+          </div>
+        </div>
+      `;
     }
 
     function renderPhases() {
@@ -329,6 +426,13 @@
       return String(text).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
     }
 
+    function escapeHtmlAttr(text) {
+      return String(text)
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/</g, '&lt;');
+    }
+
     async function loadPhases() {
       allPhases = await window.api.getPhases();
       renderStats(allPhases);
@@ -411,6 +515,129 @@
 
     async function toggleMilestone(milestoneId, phaseId, completed) {
       await window.api.togglePhaseMilestone(milestoneId, completed);
+      await loadPhases();
+    }
+
+    function startMilestoneEdit(id) {
+      editingMilestoneId = id;
+      renderPhases();
+      requestAnimationFrame(() => {
+        const input = document.getElementById(`milestone-edit-${id}`);
+        if (input) {
+          input.focus();
+          input.select();
+        }
+      });
+    }
+
+    function cancelMilestoneEdit() {
+      editingMilestoneId = null;
+      renderPhases();
+    }
+
+    async function saveMilestoneEdit(milestoneId, phaseId) {
+      const input = document.getElementById(`milestone-edit-${milestoneId}`);
+      const title = input ? input.value.trim() : '';
+      if (!title) {
+        alert('请输入小任务内容');
+        return;
+      }
+
+      await window.api.updatePhaseMilestone(milestoneId, { title });
+      editingMilestoneId = null;
+      await loadPhases();
+    }
+
+    function handleMilestoneEditKey(event, milestoneId, phaseId) {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        saveMilestoneEdit(milestoneId, phaseId);
+      }
+      if (event.key === 'Escape') {
+        cancelMilestoneEdit();
+      }
+    }
+
+    function startAddMilestone(key) {
+      addingMilestoneKey = key;
+      editingMilestoneId = null;
+      renderPhases();
+      requestAnimationFrame(() => {
+        const phaseIdMatch = key.match(/^new-(\d+)$/);
+        const newStageMatch = key.match(/^newstage-(\d+)$/);
+        const stageGroupMatch = key.match(/^(\d+)::/);
+        let input = null;
+        if (phaseIdMatch) {
+          expandedMilestones.add(parseInt(phaseIdMatch[1]));
+          input = document.getElementById(`milestone-add-new-${phaseIdMatch[1]}`)
+            || document.getElementById(`milestone-stage-new-${phaseIdMatch[1]}`);
+        } else if (newStageMatch) {
+          expandedMilestones.add(parseInt(newStageMatch[1]));
+          input = document.getElementById(`milestone-stage-newstage-${newStageMatch[1]}`);
+        } else if (stageGroupMatch) {
+          const phaseId = parseInt(stageGroupMatch[1]);
+          expandedMilestones.add(phaseId);
+          expandedStages.add(key);
+          const phase = allPhases.find(p => p.id === phaseId);
+          const group = groupMilestones(phase?.milestones || []).find(g => stageKey(phaseId, g) === key);
+          if (group) {
+            input = document.getElementById(`milestone-add-${phaseId}-${group.stage_index}`);
+          }
+        }
+        input?.focus();
+      });
+    }
+
+    function cancelAddMilestone() {
+      addingMilestoneKey = null;
+      renderPhases();
+    }
+
+    async function saveNewMilestone(phaseId, isFirst, stageTitleArg, isNewStage, stageIndexArg) {
+      let title = '';
+      let stage_title = '';
+      let stage_index = 0;
+
+      if (isFirst) {
+        stage_title = document.getElementById(`milestone-stage-new-${phaseId}`)?.value.trim() || '未分组';
+        title = document.getElementById(`milestone-add-new-${phaseId}`)?.value.trim() || '';
+        stage_index = 0;
+      } else if (isNewStage) {
+        stage_title = document.getElementById(`milestone-stage-newstage-${phaseId}`)?.value.trim() || '新阶段';
+        title = document.getElementById(`milestone-add-newstage-${phaseId}`)?.value.trim() || '';
+        stage_index = getNextStageIndex(allPhases.find(p => p.id === phaseId) || { milestones: [] });
+      } else {
+        stage_title = stageTitleArg || '未分组';
+        stage_index = stageIndexArg ?? 0;
+        title = document.getElementById(`milestone-add-${phaseId}-${stage_index}`)?.value.trim() || '';
+      }
+
+      if (!title) {
+        alert('请输入小任务内容');
+        return;
+      }
+
+      await window.api.addPhaseMilestone(phaseId, { title, stage_index, stage_title });
+      addingMilestoneKey = null;
+      expandedMilestones.add(phaseId);
+      expandedStages.add(`${phaseId}::${stage_index}::${stage_title}`);
+      await loadPhases();
+    }
+
+    function handleNewMilestoneKey(event, phaseId, isFirst, stageIndex, stageTitle, isNewStage) {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        saveNewMilestone(phaseId, isFirst, stageTitle, isNewStage, stageIndex);
+      }
+      if (event.key === 'Escape') {
+        cancelAddMilestone();
+      }
+    }
+
+    async function removeMilestone(milestoneId, phaseId) {
+      if (!confirm('确定要删除这个小任务吗？')) return;
+      if (editingMilestoneId === milestoneId) editingMilestoneId = null;
+      await window.api.deletePhaseMilestone(milestoneId);
       await loadPhases();
     }
 

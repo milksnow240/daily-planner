@@ -1196,13 +1196,17 @@ body {
 
 .phase-milestone-item {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 10px;
   padding: 10px 12px;
   background: var(--card-bg);
   border-radius: 8px;
-  cursor: pointer;
   transition: background 0.2s;
+}
+
+.phase-milestone-item.editing {
+  align-items: stretch;
+  flex-wrap: wrap;
 }
 
 .phase-milestone-item:hover {
@@ -1223,6 +1227,98 @@ body {
   font-size: 14px;
   line-height: 1.5;
   word-break: break-word;
+  cursor: text;
+}
+
+.phase-milestone-input {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 10px;
+  border: 1px solid var(--primary-color);
+  border-radius: 6px;
+  font-size: 14px;
+  line-height: 1.5;
+  background: #fff;
+}
+
+.phase-milestone-item-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.phase-milestone-edit-btn,
+.phase-milestone-delete-btn,
+.phase-milestone-save,
+.phase-milestone-cancel {
+  flex-shrink: 0;
+  padding: 4px 10px;
+  font-size: 12px;
+}
+
+.phase-milestone-edit-btn,
+.phase-milestone-delete-btn {
+  border: 1px solid var(--border-color);
+  background: #fff;
+  border-radius: 6px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.phase-milestone-edit-btn:hover {
+  color: var(--primary-color);
+  border-color: var(--primary-color);
+}
+
+.phase-milestone-delete-btn {
+  color: #cf1322;
+  border-color: #ffa39e;
+}
+
+.phase-milestone-delete-btn:hover {
+  color: #fff;
+  background: #ff4d4f;
+  border-color: #ff4d4f;
+}
+
+.phase-milestone-add-btn,
+.phase-new-stage-btn {
+  width: 100%;
+  margin-top: 4px;
+  padding: 8px 10px;
+  border: 1px dashed var(--border-color);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.phase-milestone-add-btn:hover,
+.phase-new-stage-btn:hover {
+  color: var(--primary-color);
+  border-color: var(--primary-color);
+  background: rgba(114, 46, 209, 0.04);
+}
+
+.phase-new-stage-btn {
+  margin-top: 12px;
+}
+
+.phase-milestone-add-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px dashed var(--primary-color);
+  border-radius: 8px;
+  background: rgba(114, 46, 209, 0.04);
+}
+
+.phase-milestone-item.adding {
+  border: 1px dashed var(--primary-color);
+  background: rgba(114, 46, 209, 0.04);
 }
 
 .phase-progress-slider {

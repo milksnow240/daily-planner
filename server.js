@@ -4,7 +4,7 @@ const { initDatabase, getAllTasks, addTask, deleteTask, getTasksByDate,
         toggleTaskCompletion, getDailyStats, getDateStats, getSetting, setSetting,
         getAllSettings, getTodayDate, getAllPhases, getPhaseById, addPhase,
         updatePhase, deletePhase, bulkSetMilestones, toggleMilestone,
-        addMilestone, deleteMilestone } = require('./database');
+        addMilestone, updateMilestone, deleteMilestone } = require('./database');
 const { exec } = require('child_process');
 const { startScheduler, testReminder, updateReminderTime, toggleReminder } = require('./scheduler');
 
@@ -81,6 +81,16 @@ app.post('/api/phases/:id/milestones', (req, res) => {
 app.post('/api/phase-milestones/:id/toggle', (req, res) => {
   const { completed } = req.body;
   const result = toggleMilestone(parseInt(req.params.id), !!completed);
+  if (!result) return res.status(404).json({ error: 'Milestone not found' });
+  res.json(result);
+});
+
+app.put('/api/phase-milestones/:id', (req, res) => {
+  const { title, stage_index, stage_title } = req.body;
+  if (title !== undefined && !String(title).trim()) {
+    return res.status(400).json({ error: 'Title is required' });
+  }
+  const result = updateMilestone(parseInt(req.params.id), { title, stage_index, stage_title });
   if (!result) return res.status(404).json({ error: 'Milestone not found' });
   res.json(result);
 });
